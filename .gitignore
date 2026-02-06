@@ -68,6 +68,7 @@ app.*.map.json
 **/config.json
 **/local.properties
 **/gradle.properties
+!android/gradle.properties
 
 # API keys and certificates
 *.pem

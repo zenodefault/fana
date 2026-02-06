@@ -571,7 +571,9 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
     IndianFoodModel food,
     double amount,
     {required bool usesGrams},
-  ) async {
+    
+    ) 
+  async {
     final grams = usesGrams ? amount : amount * food.servingWeightInGrams;
     final multiplier = grams / 100.0; // Convert to per 100g basis
     return food.getNutrientsForServing(multiplier);
