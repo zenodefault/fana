@@ -36,13 +36,15 @@ class IndianFoodModelAdapter extends TypeAdapter<IndianFoodModel> {
       sugar: fields[16] as double?,
       novaGroup: fields[17] as int?,
       isProcessed: fields[18] as bool?,
+      unitType: fields[19] == null ? 'gram' : fields[19] as String,
+      unitWeightGrams: fields[20] == null ? 100.0 : fields[20] as double,
     );
   }
 
   @override
   void write(BinaryWriter writer, IndianFoodModel obj) {
     writer
-      ..writeByte(19)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -80,7 +82,11 @@ class IndianFoodModelAdapter extends TypeAdapter<IndianFoodModel> {
       ..writeByte(17)
       ..write(obj.novaGroup)
       ..writeByte(18)
-      ..write(obj.isProcessed);
+      ..write(obj.isProcessed)
+      ..writeByte(19)
+      ..write(obj.unitType)
+      ..writeByte(20)
+      ..write(obj.unitWeightGrams);
   }
 
   @override

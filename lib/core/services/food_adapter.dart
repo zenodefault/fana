@@ -14,7 +14,14 @@ class FoodAdapter {
       final carbs = foodData['carb_g']?.toDouble() ?? 0.0;
       final fats = foodData['fat_g']?.toDouble() ?? 0.0;
       final fiber = foodData['fibre_g']?.toDouble() ?? 0.0;
-      final servingUnit = foodData['servings_unit'] ?? '100g';
+      final servingUnit = foodData['servings_unit'] ?? '100 g';
+      final unitType = _inferUnitType(servingUnit.toString());
+      final unitWeightGrams = _inferUnitWeightGrams(
+        servingUnit.toString(),
+        foodData: foodData,
+        unitType: unitType,
+        energyKcal: energyKcal,
+      );
 
       if (foodCode == null || foodName == null) {
         return null;
@@ -99,10 +106,44 @@ class FoodAdapter {
         sugar: null,
         novaGroup: null,
         isProcessed: null,
+        unitType: unitType,
+        unitWeightGrams: unitWeightGrams,
       );
     } catch (e) {
       print('Error converting database.json food to IndianFoodModel: $e');
       return null;
     }
+  }
+
+  static String _inferUnitType(String servingSize) {
+    return IndianFoodModel.inferUnitType(servingSize);
+  }
+
+  static double _inferUnitWeightGrams(
+    String servingSize, {
+    required dynamic foodData,
+    required String unitType,
+    required double energyKcal,
+  }) {
+    final explicitWeight = foodData['unit_weight_g'];
+    if (explicitWeight != null) {
+      final parsed = double.tryParse(explicitWeight.toString());
+      if (parsed != null && parsed > 0) return parsed;
+    }
+
+    final unitServingKcal = foodData['unit_serving_energy_kcal'];
+    if (unitServingKcal != null &&
+        energyKcal > 0 &&
+        unitServingKcal is num &&
+        unitServingKcal > 0) {
+      final grams = (unitServingKcal / energyKcal) * 100.0;
+      if (grams.isFinite && grams > 0) return grams;
+    }
+
+    final parsedFromText =
+        IndianFoodModel.inferUnitWeightGrams(servingSize, unitType: unitType);
+    if (parsedFromText > 0) return parsedFromText;
+
+    return IndianFoodModel.defaultUnitWeightForType(unitType);
   }
 }

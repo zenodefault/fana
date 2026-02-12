@@ -14,7 +14,7 @@ class FoodDatabaseService {
       'lib/core/services/database.json'; // Updated to use the new database
   static bool _offConfigured = false;
   static const int _minOffQueryLength = 3;
-  static const Duration _offTimeout = Duration(seconds: 8);
+  static const Duration _offTimeout = Duration(seconds: 20);
   static const Duration _cacheTtl = Duration(minutes: 10);
   static const int _maxCacheItems = 50;
   static const String _cacheKeysKey = 'food_cache_ids';
@@ -22,6 +22,7 @@ class FoodDatabaseService {
   static final Map<String, DateTime> _searchCacheTimes = {};
   static final Map<String, String> _searchCacheSource = {};
   static List<IndianFoodModel>? _localDbCache;
+  static String? lastOffError;
 
   static Future<void> initialize() async {
     try {
@@ -69,6 +70,7 @@ class FoodDatabaseService {
   }
 
   static Future<List<IndianFoodModel>> searchFoods(String query) async {
+    lastOffError = null;
     final normalizedQuery = query.trim().toLowerCase();
     final cached = _searchCache[normalizedQuery];
     final cachedAt = _searchCacheTimes[normalizedQuery];
@@ -188,6 +190,7 @@ class FoodDatabaseService {
     bool ignoreGlobalCountry = false,
   }) async {
     OpenFoodFactsCountry? previousCountry;
+    Object? lastError;
     try {
       _ensureOpenFoodFactsConfig();
       previousCountry = OpenFoodAPIConfiguration.globalCountry;
@@ -195,52 +198,70 @@ class FoodDatabaseService {
         OpenFoodAPIConfiguration.globalCountry = null;
       }
 
-      final ProductSearchQueryConfiguration configuration =
-          ProductSearchQueryConfiguration(
-        parametersList: <Parameter>[
-          SearchTerms(terms: <String>[query]),
-          PageSize(size: 10),
-          PageNumber(page: 1),
-        ],
-        country: country,
-        fields: <ProductField>[
-          ProductField.BARCODE,
-          ProductField.NAME,
-          ProductField.GENERIC_NAME,
-          ProductField.BRANDS,
-          ProductField.CATEGORIES,
-          ProductField.COUNTRIES,
-          ProductField.SERVING_SIZE,
-          ProductField.QUANTITY,
-          ProductField.IMAGE_FRONT_URL,
-          ProductField.NUTRIMENTS,
-          ProductField.INGREDIENTS_ANALYSIS_TAGS,
-          ProductField.NOVA_GROUP,
-          ProductField.LAST_MODIFIED,
-        ],
-        version: ProductQueryVersion.v3,
-      );
+      for (var attempt = 1; attempt <= 2; attempt++) {
+        try {
+          final ProductSearchQueryConfiguration configuration =
+              ProductSearchQueryConfiguration(
+            parametersList: <Parameter>[
+              SearchTerms(terms: <String>[query]),
+              PageSize(size: 10),
+              PageNumber(page: 1),
+            ],
+            country: country,
+            fields: <ProductField>[
+              ProductField.BARCODE,
+              ProductField.NAME,
+              ProductField.GENERIC_NAME,
+              ProductField.BRANDS,
+              ProductField.CATEGORIES,
+              ProductField.COUNTRIES,
+              ProductField.SERVING_SIZE,
+              ProductField.QUANTITY,
+              ProductField.IMAGE_FRONT_URL,
+              ProductField.NUTRIMENTS,
+              ProductField.INGREDIENTS_ANALYSIS_TAGS,
+              ProductField.NOVA_GROUP,
+              ProductField.LAST_MODIFIED,
+            ],
+            version: ProductQueryVersion.v3,
+          );
 
-      final SearchResult result = await OpenFoodAPIClient.searchProducts(
-        null,
-        configuration,
-      ).timeout(_offTimeout);
+          final SearchResult result = await OpenFoodAPIClient.searchProducts(
+            null,
+            configuration,
+          ).timeout(_offTimeout);
 
-      final products = result.products ?? <Product>[];
-      if (products.isEmpty) {
-        return <IndianFoodModel>[];
+          final products = result.products ?? <Product>[];
+          if (products.isEmpty) {
+            return <IndianFoodModel>[];
+          }
+
+          final mapped = products
+              .where((product) => product.getBestProductName(
+                        OpenFoodFactsLanguage.ENGLISH,
+                      ).isNotEmpty)
+              .map((product) => _mapOpenFoodProduct(product, query))
+              .toList();
+          await _upsertFoods(mapped);
+          return mapped;
+        } on TimeoutException catch (e) {
+          lastError = e;
+          if (attempt < 2) {
+            await Future.delayed(const Duration(milliseconds: 500));
+            continue;
+          }
+        } catch (e) {
+          lastError = e;
+          break;
+        }
       }
-
-      final mapped = products
-          .where((product) => product.getBestProductName(
-                    OpenFoodFactsLanguage.ENGLISH,
-                  ).isNotEmpty)
-          .map((product) => _mapOpenFoodProduct(product, query))
-          .toList();
-      await _upsertFoods(mapped);
-      return mapped;
-    } catch (e) {
-      print('OpenFoodFacts search error: $e');
+      if (lastError != null) {
+        lastOffError =
+            lastError is TimeoutException
+                ? 'Open Food Facts timed out. Check your connection and try again.'
+                : 'Open Food Facts is unavailable right now.';
+        print('OpenFoodFacts search error: $lastError');
+      }
       return <IndianFoodModel>[];
     } finally {
       if (ignoreGlobalCountry) {
@@ -382,6 +403,16 @@ class FoodDatabaseService {
 
     final name =
         product.getBestProductName(OpenFoodFactsLanguage.ENGLISH).trim();
+    final servingText =
+        (product.servingSize?.trim().isNotEmpty == true
+                ? product.servingSize!.trim()
+                : null) ??
+            (product.quantity?.trim().isNotEmpty == true
+                ? product.quantity!.trim()
+                : '100 g');
+    final unitType = IndianFoodModel.inferUnitType(servingText);
+    final unitWeightGrams =
+        IndianFoodModel.inferUnitWeightGrams(servingText, unitType: unitType);
 
     return IndianFoodModel(
       id: product.barcode?.trim().isNotEmpty == true
@@ -400,9 +431,7 @@ class FoodDatabaseService {
       carbs: carbs,
       fats: fats,
       fiber: fiber,
-      servingSize: product.servingSize ??
-          product.quantity ??
-          '100 g',
+      servingSize: servingText,
       keywords: <String>{
         query.toLowerCase(),
         if (product.brands != null) product.brands!.toLowerCase(),
@@ -416,6 +445,8 @@ class FoodDatabaseService {
       sugar: sugar,
       novaGroup: novaGroup,
       isProcessed: isProcessed,
+      unitType: unitType,
+      unitWeightGrams: unitWeightGrams,
     );
   }
 

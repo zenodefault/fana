@@ -21,6 +21,7 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _controller = PageController();
   int _step = 0;
+  int _previousStep = 0;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _weightController = TextEditingController();
@@ -29,7 +30,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Sex _sex = Sex.other;
   ActivityLevel _activityLevel = ActivityLevel.low;
 
-  final TextEditingController _targetWeightController = TextEditingController();
   String _fitnessFocus = 'General';
 
   final Map<String, bool> _defaultHabits = {
@@ -45,7 +45,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _weightController.dispose();
     _heightController.dispose();
     _ageController.dispose();
-    _targetWeightController.dispose();
     super.dispose();
   }
 
@@ -56,7 +55,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final weight = double.tryParse(_weightController.text) ?? 70.0;
     final heightCm = double.tryParse(_heightController.text) ?? 0.0;
     final age = int.tryParse(_ageController.text) ?? 0;
-    final targetWeight = int.tryParse(_targetWeightController.text) ?? 0;
 
     final user = User(
       id: const Uuid().v4(),
@@ -74,17 +72,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     final now = DateTime.now();
     final goals = <Goal>[
-      if (targetWeight > 0)
-        Goal(
-          id: const Uuid().v4(),
-          title: 'Weight Goal',
-          description: 'Target weight',
-          targetValue: targetWeight,
-          currentValue: weight.round(),
-          unit: 'kg',
-          startDate: now,
-          endDate: now.add(const Duration(days: 90)),
-        ),
       Goal(
         id: const Uuid().v4(),
         title: 'Fitness Focus',
@@ -148,7 +135,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    if (_step < 4) {
+    if (_step < 3) {
       _controller.nextPage(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
@@ -176,28 +163,54 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         child: PageView(
           controller: _controller,
           physics: const BouncingScrollPhysics(),
-          onPageChanged: (index) => setState(() => _step = index),
+          onPageChanged: (index) => setState(() {
+            _previousStep = _step;
+            _step = index;
+          }),
           children: [
-            _buildWelcome(theme, isLight),
+            _buildStart(theme, isLight),
             _buildProfile(theme, isLight),
             _buildGoals(theme, isLight),
             _buildHabits(theme, isLight),
-            _buildFinish(theme, isLight),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildWelcome(ThemeData theme, bool isLight) {
+  Widget _buildStart(ThemeData theme, bool isLight) {
     return _centeredStep(
       theme,
-      title: 'Welcome',
-      subtitle:
-          'Let’s personalize your plan so you stay motivated and consistent.',
+      title: 'Let’s build your plan',
+      subtitle: 'Takes under 1 minute to personalize your journey.',
       icon: AppIcons.chart,
+      accentColor: isLight ? const Color(0xFF5B8CFF) : const Color(0xFF7AA2FF),
       isLight: isLight,
-      child: const SizedBox.shrink(),
+      child: GlassCard(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              'Track workouts, habits, and nutrition in one place.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: isLight
+                    ? LightColors.mutedForeground
+                    : DarkColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _next,
+                child: const Text('Start'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -207,6 +220,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       title: 'About You',
       subtitle: 'This helps us personalize your goals.',
       icon: AppIcons.user,
+      accentColor: isLight ? const Color(0xFF5BD1A2) : const Color(0xFF6FE2B8),
       isLight: isLight,
       child: GlassCard(
         padding: const EdgeInsets.all(16),
@@ -235,46 +249,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               isLight: isLight,
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<Sex>(
-              value: _sex,
-              decoration: const InputDecoration(labelText: 'Sex'),
-              items: Sex.values
-                  .map(
-                    (value) => DropdownMenuItem(
-                      value: value,
-                      child: Text(value.name),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _sex = value);
-                }
-              },
+            _segmentedControl<Sex>(
+              label: 'Sex',
+              options: const [
+                SegmentedOption(label: 'Male', value: Sex.male),
+                SegmentedOption(label: 'Female', value: Sex.female),
+                SegmentedOption(label: 'Other', value: Sex.other),
+              ],
+              selected: _sex,
+              onChanged: (value) => setState(() => _sex = value),
+              isLight: isLight,
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<ActivityLevel>(
-              value: _activityLevel,
-              decoration: const InputDecoration(labelText: 'Activity Level'),
-              items: const [
-                DropdownMenuItem(
-                  value: ActivityLevel.low,
-                  child: Text('Low active'),
-                ),
-                DropdownMenuItem(
-                  value: ActivityLevel.moderate,
-                  child: Text('Moderately active'),
-                ),
-                DropdownMenuItem(
-                  value: ActivityLevel.high,
-                  child: Text('Highly active'),
-                ),
+            _segmentedControl<ActivityLevel>(
+              label: 'Activity',
+              options: const [
+                SegmentedOption(label: 'Low', value: ActivityLevel.low),
+                SegmentedOption(label: 'Moderate', value: ActivityLevel.moderate),
+                SegmentedOption(label: 'High', value: ActivityLevel.high),
               ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _activityLevel = value);
-                }
-              },
+              selected: _activityLevel,
+              onChanged: (value) => setState(() => _activityLevel = value),
+              isLight: isLight,
             ),
           ],
         ),
@@ -286,36 +282,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return _centeredStep(
       theme,
       title: 'Goals',
-      subtitle: 'Set a target and focus.',
+      subtitle: 'Choose your fitness focus.',
       icon: AppIcons.flag,
+      accentColor: isLight ? const Color(0xFFFFB347) : const Color(0xFFFFC069),
       isLight: isLight,
       child: GlassCard(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _textField(
-              _targetWeightController,
-              'Target Weight (kg)',
-              keyboardType: TextInputType.number,
-              isLight: isLight,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _fitnessFocus,
-              decoration: const InputDecoration(labelText: 'Fitness Focus'),
-              items: const [
-                DropdownMenuItem(value: 'Strength', child: Text('Strength')),
-                DropdownMenuItem(value: 'Endurance', child: Text('Endurance')),
-                DropdownMenuItem(
-                    value: 'Flexibility', child: Text('Flexibility')),
-                DropdownMenuItem(value: 'Fat loss', child: Text('Fat loss')),
-                DropdownMenuItem(value: 'General', child: Text('General')),
+            _chipGroup(
+              label: 'Fitness Focus',
+              options: const [
+                'Strength',
+                'Endurance',
+                'Flexibility',
+                'Fat loss',
+                'General',
               ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _fitnessFocus = value);
-                }
-              },
+              selected: _fitnessFocus,
+              onSelected: (value) => setState(() => _fitnessFocus = value),
+              isLight: isLight,
             ),
           ],
         ),
@@ -329,43 +315,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       title: 'Starter Habits',
       subtitle: 'We can add a few habits to kickstart your streaks.',
       icon: AppIcons.calories,
+      accentColor: isLight ? const Color(0xFF62D6FF) : const Color(0xFF7BE0FF),
       isLight: isLight,
       child: GlassCard(
         padding: const EdgeInsets.all(8),
         child: Column(
-          children: _defaultHabits.keys.map((habit) {
-            return SwitchListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-              title: Text(habit),
-              value: _defaultHabits[habit] ?? true,
-              onChanged: (value) {
-                setState(() {
-                  _defaultHabits[habit] = value;
-                });
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFinish(ThemeData theme, bool isLight) {
-    return _centeredStep(
-      theme,
-      title: 'You’re Ready',
-      subtitle: 'Your plan is set. Let’s start tracking!',
-      icon: AppIcons.habits,
-      isLight: isLight,
-      child: GlassCard(
-        padding: const EdgeInsets.all(16),
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _completeOnboarding,
-            child: const Text('Start Tracking'),
-          ),
+          children: [
+            ..._defaultHabits.keys.map((habit) {
+              final enabled = _defaultHabits[habit] ?? true;
+              return _habitTile(
+                habit,
+                enabled,
+                onChanged: (value) {
+                  setState(() {
+                    _defaultHabits[habit] = value;
+                  });
+                },
+                isLight: isLight,
+              );
+            }),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _completeOnboarding,
+                child: const Text('Finish'),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -378,7 +355,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     required List<List<dynamic>> icon,
     required bool isLight,
     required Widget child,
+    Color? accentColor,
   }) {
+    final accent = accentColor ??
+        (isLight ? LightColors.primary : DarkColors.primary);
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -392,7 +372,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(
-                    5,
+                    4,
                     (index) => AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       margin: const EdgeInsets.only(right: 6),
@@ -400,9 +380,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       height: 8,
                       decoration: BoxDecoration(
                         color: index == _step
-                            ? (isLight
-                                ? LightColors.primary
-                                : DarkColors.primary)
+                            ? accent
                             : (isLight
                                 ? LightColors.mutedForeground.withOpacity(0.25)
                                 : DarkColors.mutedForeground.withOpacity(0.25)),
@@ -417,33 +395,52 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: AppIcon(
                     icon,
                     size: 32,
-                    color: isLight ? LightColors.primary : DarkColors.primary,
+                    color: accent,
                   ),
                 ),
                 const SizedBox(height: 12),
                 _buildSymbolRow(isLight),
                 const SizedBox(height: 12),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color:
-                        isLight ? LightColors.foreground : DarkColors.foreground,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, animation) {
+                    final offset = _previousStep < _step ? 12.0 : -12.0;
+                    return FadeTransition(
+                      opacity: animation,
+                      child: Transform.translate(
+                        offset: Offset(0, offset * (1 - animation.value)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Column(
+                    key: ValueKey(_step),
+                    children: [
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: isLight
+                              ? LightColors.foreground
+                              : DarkColors.foreground,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        subtitle,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isLight
+                              ? LightColors.mutedForeground
+                              : DarkColors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(width: double.infinity, child: child),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: isLight
-                        ? LightColors.mutedForeground
-                        : DarkColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(width: double.infinity, child: child),
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -453,8 +450,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         onPressed: _back,
                         child: const Text('Back'),
                       ),
-                    if (_step > 0 && _step < 4) const SizedBox(width: 12),
-                    if (_step < 4)
+                    if (_step > 0 && _step < 3) const SizedBox(width: 12),
+                    if (_step < 3)
                       ElevatedButton(
                         onPressed: _next,
                         child: const Text('Next'),
@@ -518,10 +515,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return [AppIcons.flag, AppIcons.chart, AppIcons.trendUp];
       case 3:
         return [AppIcons.habits, AppIcons.streak, AppIcons.calendar];
-      case 4:
-        return [AppIcons.notification, AppIcons.time, AppIcons.calendar];
-      case 5:
-        return [AppIcons.dashboard, AppIcons.analytics, AppIcons.dumbbell];
       default:
         return const [];
     }
@@ -559,4 +552,179 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
     );
   }
+
+  Widget _segmentedControl<T>({
+    required String label,
+    required List<SegmentedOption<T>> options,
+    required T selected,
+    required ValueChanged<T> onChanged,
+    required bool isLight,
+  }) {
+    final active = isLight ? Colors.black : Colors.white;
+    final inactive = isLight ? Colors.black54 : Colors.white60;
+    final border = isLight
+        ? Colors.black.withOpacity(0.08)
+        : Colors.white.withOpacity(0.08);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: isLight
+                ? Colors.black.withOpacity(0.04)
+                : Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            children: options.map((option) {
+              final isSelected = option.value == selected;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onChanged(option.value),
+                  child: AnimatedScale(
+                    duration: const Duration(milliseconds: 160),
+                    scale: isSelected ? 1.0 : 0.97,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? (isLight
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.12))
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        option.label,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: isSelected ? active : inactive,
+                              fontWeight:
+                                  isSelected ? FontWeight.w600 : FontWeight.w500,
+                            ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _chipGroup({
+    required String label,
+    required List<String> options,
+    required String selected,
+    required ValueChanged<String> onSelected,
+    required bool isLight,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: options.map((option) {
+            final isSelected = option == selected;
+            return GestureDetector(
+              onTap: () => onSelected(option),
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 150),
+                scale: isSelected ? 1.0 : 0.96,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? (isLight
+                            ? Colors.black.withOpacity(0.9)
+                            : Colors.white.withOpacity(0.14))
+                        : (isLight
+                            ? Colors.black.withOpacity(0.06)
+                            : Colors.white.withOpacity(0.08)),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isSelected
+                          ? Colors.transparent
+                          : (isLight
+                              ? Colors.black.withOpacity(0.08)
+                              : Colors.white.withOpacity(0.12)),
+                    ),
+                  ),
+                  child: Text(
+                    option,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: isSelected
+                              ? (isLight ? Colors.white : Colors.white)
+                              : (isLight ? Colors.black87 : Colors.white70),
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
+                        ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _habitTile(
+    String label,
+    bool enabled, {
+    required ValueChanged<bool> onChanged,
+    required bool isLight,
+  }) {
+    final bg = isLight
+        ? Colors.black.withOpacity(0.04)
+        : Colors.white.withOpacity(0.06);
+    final border = isLight
+        ? Colors.black.withOpacity(0.08)
+        : Colors.white.withOpacity(0.12);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+          Switch(
+            value: enabled,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SegmentedOption<T> {
+  final String label;
+  final T value;
+
+  const SegmentedOption({required this.label, required this.value});
 }

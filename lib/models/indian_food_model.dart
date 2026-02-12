@@ -43,6 +43,10 @@ class IndianFoodModel {
   final int? novaGroup;
   @HiveField(18)
   final bool? isProcessed;
+  @HiveField(19, defaultValue: 'gram')
+  final String unitType;
+  @HiveField(20, defaultValue: 100.0)
+  final double unitWeightGrams;
 
   IndianFoodModel({
     required this.id,
@@ -64,9 +68,14 @@ class IndianFoodModel {
     this.sugar,
     this.novaGroup,
     this.isProcessed,
+    required this.unitType,
+    required this.unitWeightGrams,
   });
 
   factory IndianFoodModel.fromJson(Map<String, dynamic> json) {
+    final servingSize = json['servingSize']?.toString() ?? '';
+    final inferredUnitType = inferUnitType(servingSize);
+    final explicitUnitWeight = _normalizeUnitWeight(json['unitWeightGrams']);
     return IndianFoodModel(
       id: json['id'],
       name: json['name'],
@@ -78,7 +87,7 @@ class IndianFoodModel {
       carbs: json['carbs'].toDouble(),
       fats: json['fats'].toDouble(),
       fiber: json['fiber'].toDouble(),
-      servingSize: json['servingSize'],
+      servingSize: servingSize,
       keywords: List<String>.from(json['keywords'] ?? []),
       isVeg: json['isVeg'] ?? true,
       imageUrl: json['imageUrl'],
@@ -87,6 +96,9 @@ class IndianFoodModel {
       sugar: json['sugar']?.toDouble(),
       novaGroup: json['novaGroup'],
       isProcessed: json['isProcessed'],
+      unitType: json['unitType']?.toString() ?? inferredUnitType,
+      unitWeightGrams:
+          explicitUnitWeight ?? inferUnitWeightGrams(servingSize, unitType: inferredUnitType),
     );
   }
 
@@ -111,6 +123,8 @@ class IndianFoodModel {
       'sugar': sugar,
       'novaGroup': novaGroup,
       'isProcessed': isProcessed,
+      'unitType': unitType,
+      'unitWeightGrams': unitWeightGrams,
     };
   }
 
@@ -128,29 +142,73 @@ class IndianFoodModel {
 
   // Get serving size in grams
   double get servingWeightInGrams {
-    try {
-      final match = RegExp(
-        r'(\\d+\\.?\\d*)\\s*(g|gm|gms|gram|grams)\\b',
-        caseSensitive: false,
-      ).firstMatch(servingSize);
-      if (match != null) {
-        return double.parse(match.group(1)!);
-      }
-      // For non-gram units like cups, glasses, etc., return a default weight
-      if (servingSize.toLowerCase().contains('cup')) {
-        return 240.0; // Standard cup
-      } else if (servingSize.toLowerCase().contains('glass')) {
-        return 200.0; // Standard glass
-      } else if (servingSize.toLowerCase().contains('bowl')) {
-        return 200.0; // Standard bowl
-      } else if (servingSize.toLowerCase().contains('plate')) {
-        return 250.0; // Standard plate
-      } else if (servingSize.toLowerCase().contains('piece')) {
-        return 30.0; // Standard piece (like roti)
-      }
-      return 100.0; // Default to 100g
-    } catch (e) {
-      return 100.0;
+    if (unitWeightGrams > 0) return unitWeightGrams;
+    return inferUnitWeightGrams(servingSize, unitType: unitType);
+  }
+
+  double gramsForAmount(double amount, {String? unitType}) {
+    final unit = (unitType ?? this.unitType).toLowerCase();
+    if (unit == 'gram' || unit == 'g') {
+      return amount;
     }
+    return amount * servingWeightInGrams;
+  }
+
+  static String inferUnitType(String servingSize) {
+    final size = servingSize.toLowerCase();
+    if (size.contains('piece') ||
+        size.contains('pcs') ||
+        size.contains('pc') ||
+        size.contains('bar') ||
+        size.contains('slice')) {
+      return 'piece';
+    }
+    if (size.contains('cup')) return 'cup';
+    if (size.contains('glass')) return 'glass';
+    if (size.contains('bowl')) return 'bowl';
+    if (size.contains('plate')) return 'plate';
+    if (size.contains('serving')) return 'serving';
+    if (size.contains('ml')) return 'gram';
+    if (RegExp(r'\\d+\\.?\\d*\\s*(g|gm|gms|gram|grams)\\b').hasMatch(size)) {
+      return 'gram';
+    }
+    return 'serving';
+  }
+
+  static double inferUnitWeightGrams(String servingSize, {String? unitType}) {
+    final size = servingSize.toLowerCase();
+    final match = RegExp(
+      r'(\\d+\\.?\\d*)\\s*(g|gm|gms|gram|grams|ml)\\b',
+      caseSensitive: false,
+    ).firstMatch(size);
+    if (match != null) {
+      return double.parse(match.group(1)!);
+    }
+    return defaultUnitWeightForType(unitType ?? inferUnitType(servingSize));
+  }
+
+  static double defaultUnitWeightForType(String unitType) {
+    switch (unitType.toLowerCase()) {
+      case 'cup':
+        return 240.0;
+      case 'glass':
+        return 200.0;
+      case 'bowl':
+        return 200.0;
+      case 'plate':
+        return 250.0;
+      case 'piece':
+        return 30.0;
+      case 'gram':
+        return 100.0;
+      default:
+        return 100.0;
+    }
+  }
+
+  static double? _normalizeUnitWeight(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
   }
 }

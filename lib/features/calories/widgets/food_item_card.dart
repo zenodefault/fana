@@ -16,6 +16,22 @@ class FoodItemCard extends StatefulWidget {
 class _FoodItemCardState extends State<FoodItemCard> {
   bool _isExpanded = false;
   final TextEditingController _gramsController = TextEditingController();
+  late String _selectedUnit;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedUnit = _defaultUnitFor(widget.food);
+  }
+
+  @override
+  void didUpdateWidget(covariant FoodItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.food.id != widget.food.id) {
+      _selectedUnit = _defaultUnitFor(widget.food);
+      _gramsController.clear();
+    }
+  }
 
   @override
   void dispose() {
@@ -146,8 +162,9 @@ class _FoodItemCardState extends State<FoodItemCard> {
   }
 
   Widget _buildExpandedView(ThemeData theme, bool isLight) {
-    final usesGrams = _usesGramUnit(widget.food);
-    final unitLabel = _unitLabel(widget.food);
+    final unitOptions = _unitOptions(widget.food);
+    final usesGrams = _selectedUnit == 'gram';
+    final unitLabel = _unitLabelForType(_selectedUnit);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -184,6 +201,27 @@ class _FoodItemCardState extends State<FoodItemCard> {
         // Gram input
         Row(
           children: [
+            if (unitOptions.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: DropdownButton<String>(
+                  value: _selectedUnit,
+                  items: unitOptions
+                      .map(
+                        (unit) => DropdownMenuItem(
+                          value: unit,
+                          child: Text(_unitLabelForType(unit)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedUnit = value;
+                    });
+                  },
+                ),
+              ),
             Expanded(
               child: TextField(
                 controller: _gramsController,
@@ -199,6 +237,18 @@ class _FoodItemCardState extends State<FoodItemCard> {
             ),
           ],
         ),
+        if (!usesGrams)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              _gramsPreviewText(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: isLight
+                    ? LightColors.mutedForeground
+                    : DarkColors.mutedForeground,
+              ),
+            ),
+          ),
         const SizedBox(height: 16),
         // Meal buttons
         Row(
@@ -207,33 +257,29 @@ class _FoodItemCardState extends State<FoodItemCard> {
             _buildMealButton(theme, 'Breakfast', () {
               final amount = double.tryParse(_gramsController.text) ??
                   (usesGrams ? 100.0 : 1.0);
-              final grams = usesGrams
-                  ? amount
-                  : amount * widget.food.servingWeightInGrams;
+              final grams =
+                  widget.food.gramsForAmount(amount, unitType: _selectedUnit);
               widget.onAdd(widget.food, grams, 'Breakfast');
             }),
             _buildMealButton(theme, 'Lunch', () {
               final amount = double.tryParse(_gramsController.text) ??
                   (usesGrams ? 100.0 : 1.0);
-              final grams = usesGrams
-                  ? amount
-                  : amount * widget.food.servingWeightInGrams;
+              final grams =
+                  widget.food.gramsForAmount(amount, unitType: _selectedUnit);
               widget.onAdd(widget.food, grams, 'Lunch');
             }),
             _buildMealButton(theme, 'Dinner', () {
               final amount = double.tryParse(_gramsController.text) ??
                   (usesGrams ? 100.0 : 1.0);
-              final grams = usesGrams
-                  ? amount
-                  : amount * widget.food.servingWeightInGrams;
+              final grams =
+                  widget.food.gramsForAmount(amount, unitType: _selectedUnit);
               widget.onAdd(widget.food, grams, 'Dinner');
             }),
             _buildMealButton(theme, 'Snack', () {
               final amount = double.tryParse(_gramsController.text) ??
                   (usesGrams ? 100.0 : 1.0);
-              final grams = usesGrams
-                  ? amount
-                  : amount * widget.food.servingWeightInGrams;
+              final grams =
+                  widget.food.gramsForAmount(amount, unitType: _selectedUnit);
               widget.onAdd(widget.food, grams, 'Snack');
             }),
           ],
@@ -292,21 +338,43 @@ class _FoodItemCardState extends State<FoodItemCard> {
     );
   }
 
-  bool _usesGramUnit(IndianFoodModel food) {
-    return RegExp(
-      r'\d+\s*(g|gm|gms|gram|grams)\b',
-      caseSensitive: false,
-    ).hasMatch(food.servingSize);
+  String _defaultUnitFor(IndianFoodModel food) {
+    return food.unitType.toLowerCase() == 'gram' ? 'gram' : food.unitType;
   }
 
-  String _unitLabel(IndianFoodModel food) {
-    final size = food.servingSize.toLowerCase();
-    if (size.contains('bowl')) return 'bowl(s)';
-    if (size.contains('cup')) return 'cup(s)';
-    if (size.contains('glass')) return 'glass(es)';
-    if (size.contains('plate')) return 'plate(s)';
-    if (size.contains('piece')) return 'piece(s)';
-    if (size.contains('serving')) return 'serving(s)';
-    return 'serving(s)';
+  List<String> _unitOptions(IndianFoodModel food) {
+    final unit = food.unitType.toLowerCase();
+    if (unit == 'gram') return <String>['gram'];
+    return <String>['gram', unit];
+  }
+
+  String _unitLabelForType(String unitType) {
+    switch (unitType.toLowerCase()) {
+      case 'gram':
+        return 'g';
+      case 'bowl':
+        return 'bowl(s)';
+      case 'cup':
+        return 'cup(s)';
+      case 'glass':
+        return 'glass(es)';
+      case 'plate':
+        return 'plate(s)';
+      case 'piece':
+        return 'piece(s)';
+      case 'serving':
+        return 'serving(s)';
+      default:
+        return '${unitType.toLowerCase()}(s)';
+    }
+  }
+
+  String _gramsPreviewText() {
+    final amount = double.tryParse(_gramsController.text);
+    if (amount == null || amount <= 0) {
+      return '~ ${widget.food.servingWeightInGrams.toStringAsFixed(0)} g per ${_unitLabelForType(_selectedUnit)}';
+    }
+    final grams = widget.food.gramsForAmount(amount, unitType: _selectedUnit);
+    return '~ ${grams.toStringAsFixed(0)} g';
   }
 }

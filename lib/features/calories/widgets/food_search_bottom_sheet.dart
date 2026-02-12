@@ -23,6 +23,7 @@ class _FoodSearchBottomSheetState extends State<FoodSearchBottomSheet> {
   int _searchToken = 0;
   bool _isLoading = false;
   bool _isOffLoading = false;
+  String? _offError;
 
   @override
   void initState() {
@@ -49,6 +50,7 @@ class _FoodSearchBottomSheetState extends State<FoodSearchBottomSheet> {
     if (query.trim().isEmpty) {
       setState(() {
         _searchResults = [];
+        _offError = null;
         _isLoading = false;
         _isOffLoading = false;
       });
@@ -68,6 +70,7 @@ class _FoodSearchBottomSheetState extends State<FoodSearchBottomSheet> {
     if (localResults.isNotEmpty) {
       setState(() {
         _searchResults = localResults;
+        _offError = null;
         _isLoading = false;
         _isOffLoading = false;
       });
@@ -77,6 +80,7 @@ class _FoodSearchBottomSheetState extends State<FoodSearchBottomSheet> {
     if (query.trim().length < 3) {
       setState(() {
         _searchResults = [];
+        _offError = null;
         _isLoading = false;
         _isOffLoading = false;
       });
@@ -94,6 +98,7 @@ class _FoodSearchBottomSheetState extends State<FoodSearchBottomSheet> {
     }
     setState(() {
       _searchResults = results;
+      _offError = FoodDatabaseService.lastOffError;
       _isLoading = false;
       _isOffLoading = false;
     });
@@ -166,7 +171,9 @@ class _FoodSearchBottomSheetState extends State<FoodSearchBottomSheet> {
                     child: Text(
                       _searchController.text.isEmpty
                           ? 'Start typing to search'
-                          : 'No results found',
+                          : (_offError != null
+                              ? _offError!
+                              : 'No results found'),
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: isLight ? LightColors.mutedForeground : DarkColors.mutedForeground,
                       ),

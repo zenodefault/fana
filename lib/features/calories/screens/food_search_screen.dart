@@ -22,6 +22,7 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
   bool _isLoading = false;
   bool _isOffLoading = false;
   String? _searchQuery;
+  String? _offError;
   Timer? _debounce;
   int _searchToken = 0;
 
@@ -45,6 +46,7 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
       if (mounted) {
         setState(() {
           _searchResults = results;
+          _offError = FoodDatabaseService.lastOffError;
           _isLoading = false;
         });
       }
@@ -77,6 +79,7 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
       _isLoading = true;
       _isOffLoading = false;
       _searchQuery = query.trim();
+      _offError = null;
     });
 
     final localResults =
@@ -89,6 +92,7 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
     if (localResults.isNotEmpty) {
       setState(() {
         _searchResults = localResults;
+        _offError = null;
         _isLoading = false;
         _isOffLoading = false;
       });
@@ -98,6 +102,7 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
     if (query.trim().length < 3) {
       setState(() {
         _searchResults = [];
+        _offError = null;
         _isLoading = false;
         _isOffLoading = false;
       });
@@ -118,6 +123,7 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
     if (mounted) {
       setState(() {
         _searchResults = results;
+        _offError = FoodDatabaseService.lastOffError;
         _isLoading = false;
         _isOffLoading = false;
       });
@@ -214,7 +220,7 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
             const SizedBox(height: 16),
             Text(
               _searchQuery != null
-                  ? 'No foods found for "$_searchQuery"'
+                  ? (_offError ?? 'No foods found for "$_searchQuery"')
                   : 'Search Indian foods',
               style: const TextStyle(color: Colors.grey, fontSize: 18),
             ),
@@ -452,143 +458,168 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
   }
 
   void _logFood(IndianFoodModel food, Map<String, double> nutrients) {
-    final usesGrams = _usesGramUnit(food);
-    final unitLabel = _unitLabel(food);
+    final unitOptions = _unitOptions(food);
     // Show dialog to let user enter custom weight
     showDialog(
       context: context,
       builder: (context) {
-        final weightController = TextEditingController(
-          text: usesGrams ? food.servingWeightInGrams.toString() : '1',
-        );
+        final weightController = TextEditingController();
+        String selectedUnit =
+            food.unitType.toLowerCase() == 'gram' ? 'gram' : food.unitType;
+        double amount = selectedUnit == 'gram' ? food.servingWeightInGrams : 1;
+        weightController.text = amount.toString();
 
-        return AlertDialog(
-          title: Text('Log Food: ${food.name}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(usesGrams
-                  ? 'Enter amount in grams:'
-                  : 'Enter number of $unitLabel:'),
-              TextField(
-                controller: weightController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: usesGrams ? 'Amount in grams' : 'Number of $unitLabel',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Show calculated nutrients based on entered weight
-              FutureBuilder<Map<String, double>>(
-                future: _calculateNutrientsForAmount(
-                  food,
-                  double.tryParse(weightController.text) ??
-                      (usesGrams ? food.servingWeightInGrams : 1),
-                  usesGrams: usesGrams,
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    final calculatedNutrients = snapshot.data!;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          usesGrams
-                              ? 'Nutrients for ${weightController.text}g:'
-                              : 'Nutrients for ${weightController.text} $unitLabel:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          'Calories: ${calculatedNutrients['calories']?.toStringAsFixed(1)} kcal',
-                        ),
-                        Text(
-                          'Protein: ${calculatedNutrients['protein']?.toStringAsFixed(1)}g',
-                        ),
-                        Text(
-                          'Carbs: ${calculatedNutrients['carbs']?.toStringAsFixed(1)}g',
-                        ),
-                        Text(
-                          'Fats: ${calculatedNutrients['fats']?.toStringAsFixed(1)}g',
-                        ),
-                        Text(
-                          'Fiber: ${calculatedNutrients['fiber']?.toStringAsFixed(1)}g',
-                        ),
-                        if (calculatedNutrients['sugar'] != null)
-                          Text(
-                            'Sugar: ${calculatedNutrients['sugar']?.toStringAsFixed(1)}g',
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final usesGrams = selectedUnit == 'gram';
+            final unitLabel = _unitLabelForType(selectedUnit);
+            final parsedAmount = double.tryParse(weightController.text);
+            final effectiveAmount = parsedAmount ?? amount;
+            final grams = food.gramsForAmount(
+              effectiveAmount,
+              unitType: selectedUnit,
+            );
+            final nutrients = food.getNutrientsForServing(grams / 100.0);
+
+            return AlertDialog(
+              title: Text('Log Food: ${food.name}'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(usesGrams
+                      ? 'Enter amount in grams:'
+                      : 'Enter number of $unitLabel:'),
+                  Row(
+                    children: [
+                      if (unitOptions.length > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: DropdownButton<String>(
+                            value: selectedUnit,
+                            items: unitOptions
+                                .map(
+                                  (unit) => DropdownMenuItem(
+                                    value: unit,
+                                    child: Text(_unitLabelForType(unit)),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() {
+                                selectedUnit = value;
+                                amount = selectedUnit == 'gram'
+                                    ? food.servingWeightInGrams
+                                    : 1;
+                                weightController.text = amount.toString();
+                              });
+                            },
                           ),
-                        if (food.isProcessed != null)
-                          Text(
-                            "Processed: ${food.isProcessed! ? 'Yes' : 'No'}"
-                            "${food.novaGroup != null ? ' (NOVA ${food.novaGroup})' : ''}",
+                        ),
+                      Expanded(
+                        child: TextField(
+                          controller: weightController,
+                          keyboardType: TextInputType.number,
+                          onChanged: (value) {
+                            setState(() {
+                              amount = double.tryParse(value) ?? amount;
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: usesGrams
+                                ? 'Amount in grams'
+                                : 'Number of $unitLabel',
+                            border: OutlineInputBorder(),
                           ),
-                      ],
-                    );
-                  } else {
-                    return Text(
-                      usesGrams
-                          ? 'Nutrients for ${food.servingWeightInGrams}g (default):'
-                          : 'Nutrients for 1 $unitLabel (default):',
-                    );
-                  }
-                },
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!usesGrams)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text('~ ${grams.toStringAsFixed(0)} g'),
+                    ),
+                  const SizedBox(height: 16),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        usesGrams
+                            ? 'Nutrients for ${effectiveAmount.toStringAsFixed(0)}g:'
+                            : 'Nutrients for ${effectiveAmount.toStringAsFixed(1)} $unitLabel:',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Calories: ${nutrients['calories']?.toStringAsFixed(1)} kcal',
+                      ),
+                      Text(
+                        'Protein: ${nutrients['protein']?.toStringAsFixed(1)}g',
+                      ),
+                      Text(
+                        'Carbs: ${nutrients['carbs']?.toStringAsFixed(1)}g',
+                      ),
+                      Text(
+                        'Fats: ${nutrients['fats']?.toStringAsFixed(1)}g',
+                      ),
+                      Text(
+                        'Fiber: ${nutrients['fiber']?.toStringAsFixed(1)}g',
+                      ),
+                      if (nutrients['sugar'] != null)
+                        Text(
+                          'Sugar: ${nutrients['sugar']?.toStringAsFixed(1)}g',
+                        ),
+                      if (food.isProcessed != null)
+                        Text(
+                          "Processed: ${food.isProcessed! ? 'Yes' : 'No'}"
+                          "${food.novaGroup != null ? ' (NOVA ${food.novaGroup})' : ''}",
+                        ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final amount = double.tryParse(weightController.text);
-                if (amount != null && amount > 0) {
-                  await _logFoodWithCustomAmount(
-                    food,
-                    amount,
-                    usesGrams: usesGrams,
-                  );
-                  if (!context.mounted) return;
-                  Navigator.of(context).pop();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please enter a valid amount')),
-                  );
-                }
-              },
-              child: Text('Log Food'),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final value = double.tryParse(weightController.text);
+                    if (value != null && value > 0) {
+                      await _logFoodWithCustomAmount(
+                        food,
+                        value,
+                        unitType: selectedUnit,
+                      );
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Please enter a valid amount')),
+                      );
+                    }
+                  },
+                  child: Text('Log Food'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
-  }
-
-  // Calculate nutrients for a custom amount (grams or servings)
-  Future<Map<String, double>> _calculateNutrientsForAmount(
-    IndianFoodModel food,
-    double amount,
-    {required bool usesGrams},
-    
-    ) 
-  async {
-    final grams = usesGrams ? amount : amount * food.servingWeightInGrams;
-    final multiplier = grams / 100.0; // Convert to per 100g basis
-    return food.getNutrientsForServing(multiplier);
   }
 
   // Log food with custom amount (grams or servings)
   Future<void> _logFoodWithCustomAmount(
     IndianFoodModel food,
     double amount,
-    {required bool usesGrams},
+    {required String unitType}
   ) async {
     final provider = context.read<FitnessProvider>();
 
     // Calculate nutrients for the custom weight
-    final grams = usesGrams ? amount : amount * food.servingWeightInGrams;
+    final grams = food.gramsForAmount(amount, unitType: unitType);
     final multiplier = grams / 100.0;
     final nutrients = food.getNutrientsForServing(multiplier);
 
@@ -613,9 +644,9 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              usesGrams
+              unitType == 'gram'
                   ? '${food.name} (${grams.toStringAsFixed(0)}g) added to your food log!'
-                  : '${food.name} ($amount ${_unitLabel(food)}) added to your food log!',
+                  : '${food.name} ($amount ${_unitLabelForType(unitType)}) added to your food log!',
             ),
           ),
         );
@@ -629,22 +660,31 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
     }
   }
 
-  bool _usesGramUnit(IndianFoodModel food) {
-    return RegExp(
-      r'\d+\s*(g|gm|gms|gram|grams)\b',
-      caseSensitive: false,
-    ).hasMatch(food.servingSize);
+  List<String> _unitOptions(IndianFoodModel food) {
+    final unit = food.unitType.toLowerCase();
+    if (unit == 'gram') return <String>['gram'];
+    return <String>['gram', unit];
   }
 
-  String _unitLabel(IndianFoodModel food) {
-    final size = food.servingSize.toLowerCase();
-    if (size.contains('bowl')) return 'bowl(s)';
-    if (size.contains('cup')) return 'cup(s)';
-    if (size.contains('glass')) return 'glass(es)';
-    if (size.contains('plate')) return 'plate(s)';
-    if (size.contains('piece')) return 'piece(s)';
-    if (size.contains('serving')) return 'serving(s)';
-    return 'serving(s)';
+  String _unitLabelForType(String unitType) {
+    switch (unitType.toLowerCase()) {
+      case 'gram':
+        return 'g';
+      case 'bowl':
+        return 'bowl(s)';
+      case 'cup':
+        return 'cup(s)';
+      case 'glass':
+        return 'glass(es)';
+      case 'plate':
+        return 'plate(s)';
+      case 'piece':
+        return 'piece(s)';
+      case 'serving':
+        return 'serving(s)';
+      default:
+        return '${unitType.toLowerCase()}(s)';
+    }
   }
 
   Widget _buildAttributionFooter() {
