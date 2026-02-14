@@ -174,7 +174,7 @@ class FoodDatabaseService {
   static void _ensureOpenFoodFactsConfig() {
     if (_offConfigured) return;
     OpenFoodAPIConfiguration.userAgent = UserAgent(
-      name: 'Fana',
+      name: 'Sumi',
       url: 'https://github.com/',
     );
     OpenFoodAPIConfiguration.globalCountry = OpenFoodFactsCountry.INDIA;

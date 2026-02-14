@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "fana" "\0"
+            VALUE "FileDescription", "sumi" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "fana" "\0"
+            VALUE "InternalName", "sumi" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "fana.exe" "\0"
-            VALUE "ProductName", "fana" "\0"
+            VALUE "OriginalFilename", "sumi.exe" "\0"
+            VALUE "ProductName", "sumi" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

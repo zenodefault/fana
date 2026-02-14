@@ -343,6 +343,30 @@ class FitnessProvider extends ChangeNotifier {
     return streak;
   }
 
+  /// Look up an exercise by id across all muscle group buckets.
+  Exercise? getExerciseById(String id) {
+    for (final entry in _exerciseDatabase.entries) {
+      try {
+        return entry.value.firstWhere((e) => e.id == id);
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  /// Returns up to [maxDays] of days that contain exercise entries, newest first.
+  List<DailyLog> getExerciseHistory({int maxDays = 90}) {
+    final history = _dailyLogs
+        .where((log) => log.exerciseEntries.isNotEmpty)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    if (history.length > maxDays) {
+      return history.sublist(0, maxDays);
+    }
+    return history;
+  }
+
   // Get user's current weight
   double getCurrentWeight() {
     if (_user != null) {

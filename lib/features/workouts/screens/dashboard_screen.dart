@@ -12,6 +12,7 @@ import '../../habits/widgets/streak_card.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../calories/screens/calorie_tracking_screen.dart';
 import '../../anatomy/screens/anatomy_screen.dart';
+import 'exercise_history_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key}) : super();
@@ -143,6 +144,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildAnimatedCard(
                     _buildCaloriesProgressCard(provider, theme),
                     delay: 200,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildAnimatedCard(
+                    _buildHistoryCard(theme),
+                    delay: 220,
                   ),
                 ],
               ),
@@ -281,6 +287,73 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildHistoryCard(ThemeData theme) {
+    final isLight = theme.brightness == Brightness.light;
+
+    return GlassDashboardCard(
+      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.zero,
+      opacity: 0.22,
+      blur: 14,
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ExerciseHistoryScreen(),
+          ),
+        );
+      },
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: (isLight ? LightColors.primary : DarkColors.primary)
+                  .withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: AppIcon(
+                AppIcons.time,
+                size: 26,
+                color: isLight ? LightColors.primary : DarkColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Exercise History',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Review your logged sets & reps',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: isLight
+                        ? LightColors.mutedForeground
+                        : DarkColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AppIcon(
+            AppIcons.chevronRight,
+            size: 20,
+            color: theme.iconTheme.color?.withValues(alpha: 0.6),
+          ),
+        ],
       ),
     );
   }

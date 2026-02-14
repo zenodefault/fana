@@ -1,4 +1,4 @@
-# Fana
+# Sumi
 
 A Flutter-based fitness and wellness app that brings together calorie tracking, habits, workouts, and analytics in one place.
 

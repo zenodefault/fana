@@ -37,15 +37,19 @@ class _AnatomyScreenState extends State<AnatomyScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
+    final canPop = Navigator.of(context).canPop();
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         foregroundColor: isLight ? Colors.black : Colors.white,
-        leading: IconButton(
-          icon: AppIcon(AppIcons.arrowLeft),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        automaticallyImplyLeading: false,
+        leading: canPop
+            ? IconButton(
+                icon: AppIcon(AppIcons.arrowLeft),
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
         title: const Text('Anatomy'),
         centerTitle: true,
         elevation: 0,

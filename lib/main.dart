@@ -34,7 +34,7 @@ class FitnessApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => FitnessProvider(),
       child: MaterialApp(
-        title: 'Fitness Tracker',
+        title: 'Sumi',
         theme: FitnessTheme.lightTheme,
         darkTheme: FitnessTheme.darkTheme,
         home: const OnboardingGate(),
